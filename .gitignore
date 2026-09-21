@@ -11,7 +11,6 @@ WireGuard/backups/
 Thumbs.db
 *.swp
 *.tmp
-
 # Smart Router generated configuration, rule caches, and runtime state
 smart-router/config/config.windows.json
 smart-router/config/*.local.json

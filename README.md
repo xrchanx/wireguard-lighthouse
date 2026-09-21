@@ -53,7 +53,6 @@ After importing and activating a client configuration, verify that the public IP
 sudo wg show wg0 latest-handshakes
 sudo wg show wg0 transfer
 ```
-
 ## macOS
 
 Install the official WireGuard macOS app, choose **Import tunnel(s) from file**, and select
