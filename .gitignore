@@ -1,0 +1,14 @@
+# WireGuard client/server secrets and generated QR data
+WireGuard/*.conf
+!WireGuard/*.example.conf
+WireGuard/*.key
+WireGuard/*.qr
+WireGuard/*.qr.txt
+WireGuard/backups/
+
+# Local/editor/OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.tmp
+
