@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "description": "Local overrides. Use domain names, domain suffixes, or IP/CIDR values.",
+  "direct": [
+    "example.cn"
+  ],
+  "proxy": [
+    "example.com"
+  ]
+}

@@ -1,0 +1,20 @@
+# WireGuard client/server secrets and generated QR data
+WireGuard/*.conf
+!WireGuard/*.example.conf
+WireGuard/*.key
+WireGuard/*.qr
+WireGuard/*.qr.txt
+WireGuard/backups/
+
+# Local/editor/OS files
+.DS_Store
+Thumbs.db
+*.swp
+*.tmp
+
+# Smart Router generated configuration, rule caches, and runtime state
+smart-router/config/config.windows.json
+smart-router/config/*.local.json
+smart-router/rules/cache/
+smart-router/rules/generated/
+smart-router/runtime/

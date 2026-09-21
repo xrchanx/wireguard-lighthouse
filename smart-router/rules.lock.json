@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-09-21T10:35:07.4480734Z",
+  "sources": {
+    "geosite-geolocation-cn": {
+      "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-geolocation-cn.srs",
+      "updated_at": "2026-09-21T10:35:06.5908262Z",
+      "bytes": 56186,
+      "sha256": "7009546a5c87d7c061a33f69baa5672b323a12167da3bbb21217689d87d3105e"
+    },
+    "geosite-geolocation-!cn": {
+      "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-geolocation-!cn.srs",
+      "updated_at": "2026-09-21T10:35:07.0680300Z",
+      "bytes": 167976,
+      "sha256": "f11415f410c467561d1a149205482eebc6ec6c211e50626c8438a88735c98bce"
+    },
+    "geoip-cn": {
+      "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",
+      "updated_at": "2026-09-21T10:35:07.4456387Z",
+      "bytes": 34185,
+      "sha256": "ebee603fdf402314b44b9f653cdcf6d9cc9c41e84e2b3515e3123c5c920a93bc"
+    }
+  }
+}

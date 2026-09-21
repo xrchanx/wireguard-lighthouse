@@ -1,0 +1,10 @@
+{
+  "version": 5,
+  "rules": [
+    {
+      "domain_suffix": [
+        "example.cn"
+      ]
+    }
+  ]
+}
