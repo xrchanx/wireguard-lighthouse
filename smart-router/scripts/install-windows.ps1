@@ -151,7 +151,9 @@ try {
     }
 
     New-Item -ItemType Directory -Path (Split-Path -Parent $generatedPath) -Force | Out-Null
-    $config | ConvertTo-Json -Depth 30 | Set-Content -LiteralPath $generatedPath -Encoding UTF8
+    $json = $config | ConvertTo-Json -Depth 30
+    $utf8NoBom = New-Object -TypeName System.Text.UTF8Encoding -ArgumentList @($false)
+    [System.IO.File]::WriteAllText($generatedPath, $json, $utf8NoBom)
     Write-Status -Level 'PASS' -Message 'Generated the ignored Smart Router config from the local WireGuard peer without printing key material.'
 
     $wireGuardPath = Resolve-WireGuardPath

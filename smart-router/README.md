@@ -105,6 +105,16 @@ The public Lighthouse server currently documents IPv4 egress. The template keeps
 - If the WireGuard endpoint is down, direct/LAN rules remain direct while proxy traffic fails rather than silently falling back to direct.
 - Stopping sing-box lets its TUN cleanup run; the stop script also removes only routes attached to the named `smart-router` adapter if a stale adapter remains.
 
+## Windows administrator acceptance
+
+The MVP was exercised on a real Windows administrator PowerShell session on 2026-09-21/22 with sing-box 1.14.1 and the local ignored `WireGuard/windows.conf`:
+
+- The generated configuration passed `sing-box check`; local and downloaded rule-sets loaded, and split DNS returned answers for both China and proxy domains.
+- Real HTTPS requests to `baidu.com`, `jd.com`, and `bilibili.com` used the direct path. Real requests to `github.com` and `openai.com` used the WireGuard proxy path; the latter returned an HTTP 403 response from the site, proving the HTTP path was reached.
+- Direct and proxy public-IP probes showed different egresses. sing-box logs showed `outbound/direct` for direct traffic and `endpoint/wireguard[wg-lighthouse]` for proxy traffic.
+- `127.0.0.1` and the local gateway were reachable. Normal stop, forced process termination, endpoint-failure isolation, and repeated start/stop/start recovery were exercised; endpoint failure kept direct traffic working and made proxy traffic fail without fallback.
+- The start script waits for the TUN adapter and retries one transient Windows Wintun adapter collision. Windows reboot and server-side `wg show` counter collection were not performed in this environment.
+
 ## Current limitations
 
 - Windows is the implemented MVP target. Android/iOS/macOS adaptation is intentionally left for a later phase.

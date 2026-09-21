@@ -44,6 +44,11 @@ try {
         Write-Status -Level 'WARN' -Message 'Skipped rule update at the user request.'
     }
 
+    $staleAdapter = Get-NetAdapter -Name 'smart-router' -ErrorAction SilentlyContinue
+    if ($staleAdapter) {
+        throw 'The Smart Router adapter already exists without a matching Smart Router process. Run stop-windows.ps1 and wait for adapter cleanup before starting again.'
+    }
+
     $checkExit = Invoke-SingBoxCheck -SingBoxPath $singBox -WorkingDirectory $smartRouterRoot -ConfigPath $ConfigPath
     if ($checkExit -ne 0) {
         throw 'sing-box config check failed. Smart Router was not started.'
@@ -62,12 +67,49 @@ try {
         '-c',
         ('"{0}"' -f ((Resolve-Path -LiteralPath $ConfigPath).Path))
     )
-    $process = Start-Process -FilePath $singBox -ArgumentList $startArguments -WorkingDirectory $smartRouterRoot -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -WindowStyle Hidden -PassThru
-    Start-Sleep -Seconds 2
+    $process = $null
+    $adapter = $null
+    $started = $false
+    for ($attempt = 1; $attempt -le 2; $attempt++) {
+        $staleAdapter = Get-NetAdapter -Name 'smart-router' -ErrorAction SilentlyContinue
+        if ($staleAdapter) {
+            throw 'The Smart Router adapter already exists without a matching Smart Router process. Run stop-windows.ps1 and wait for adapter cleanup before starting again.'
+        }
 
-    if ($process.HasExited) {
+        $process = Start-Process -FilePath $singBox -ArgumentList $startArguments -WorkingDirectory $smartRouterRoot -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -WindowStyle Hidden -PassThru
+        $deadline = (Get-Date).AddSeconds(30)
+        $adapter = $null
+        do {
+            Start-Sleep -Milliseconds 500
+            $process.Refresh()
+            if (-not $process.HasExited) {
+                $adapter = Get-NetAdapter -Name 'smart-router' -ErrorAction SilentlyContinue
+            }
+        } while (-not $process.HasExited -and (-not $adapter -or $adapter.Status -ne 'Up') -and (Get-Date) -lt $deadline)
+
+        $process.Refresh()
+        if (-not $process.HasExited -and $adapter -and $adapter.Status -eq 'Up') {
+            $started = $true
+            break
+        }
+
         $errorTail = if (Test-Path -LiteralPath $stderrPath) { (Get-Content -LiteralPath $stderrPath -Tail 20) -join [Environment]::NewLine } else { '' }
-        throw "sing-box exited immediately with code $($process.ExitCode). $errorTail"
+        $transientWindowsTunError = $errorTail -match 'Cannot create a file when that file already exists|Element not found'
+        if ($process.HasExited -and $attempt -lt 2 -and $transientWindowsTunError) {
+            Write-Status -Level 'WARN' -Message 'Windows TUN creation hit a transient Wintun adapter collision; waiting 20 seconds and retrying once.'
+            Start-Sleep -Seconds 20
+            continue
+        }
+
+        if ($process.HasExited) {
+            throw "sing-box exited during startup with code $($process.ExitCode). $errorTail"
+        }
+        Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+        throw 'sing-box is running but the Smart Router TUN adapter did not become ready within 30 seconds.'
+    }
+
+    if (-not $started) {
+        throw 'Smart Router did not become ready after the allowed startup attempts.'
     }
 
     Write-Status -Level 'PASS' -Message ("Smart Router started (PID {0}). Logs: {1}" -f $process.Id, $runtimeRoot)

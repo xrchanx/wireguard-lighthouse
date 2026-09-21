@@ -43,7 +43,9 @@ try {
 
         $temporaryPath = Join-Path (Split-Path -Parent $Path) ((Split-Path -Leaf $Path) + '.' + [guid]::NewGuid().ToString('N') + '.tmp')
         try {
-            $Value | ConvertTo-Json -Depth 20 | Set-Content -LiteralPath $temporaryPath -Encoding UTF8
+            $json = $Value | ConvertTo-Json -Depth 20
+            $utf8NoBom = New-Object -TypeName System.Text.UTF8Encoding -ArgumentList @($false)
+            [System.IO.File]::WriteAllText($temporaryPath, $json, $utf8NoBom)
             Move-Item -LiteralPath $temporaryPath -Destination $Path -Force
         }
         finally {

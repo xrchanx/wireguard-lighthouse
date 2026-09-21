@@ -65,6 +65,12 @@ try {
     }
 
     $processes = @(Get-SingBoxProcessesForConfig -ConfigPath $ConfigPath)
+    if ($processes.Count -eq 0) {
+        $visibleProcesses = @(Get-Process -Name 'sing-box' -ErrorAction SilentlyContinue)
+        if ($visibleProcesses.Count -eq 1) {
+            $processes = $visibleProcesses
+        }
+    }
     Report-Check -Passed ($processes.Count -gt 0) -Message 'Smart Router process is running.'
 
     $adapter = Get-NetAdapter -Name 'smart-router' -ErrorAction SilentlyContinue

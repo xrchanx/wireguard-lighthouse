@@ -17,6 +17,7 @@ try {
     }
 
     $processes = @(Get-SingBoxProcessesForConfig -ConfigPath $ConfigPath)
+    $hadSmartRouterProcess = $processes.Count -gt 0
     if ($processes.Count -eq 0) {
         Write-Status -Level 'INFO' -Message 'No Smart Router process matched the generated config.'
     }
@@ -42,7 +43,22 @@ try {
         }
     }
 
-    $adapter = Get-NetAdapter -Name 'smart-router' -ErrorAction SilentlyContinue
+    $adapterDeadline = (Get-Date).AddSeconds(30)
+    do {
+        $adapter = Get-NetAdapter -Name 'smart-router' -ErrorAction SilentlyContinue
+        if ($adapter) {
+            Start-Sleep -Milliseconds 500
+        }
+    } while ($adapter -and (Get-Date) -lt $adapterDeadline)
+
+    if (-not $adapter -and $hadSmartRouterProcess) {
+        Start-Sleep -Seconds 30
+    }
+
+    if (-not $adapter) {
+        Start-Sleep -Seconds 2
+    }
+
     if ($adapter) {
         $ownedPrefixes = @(
             '0.0.0.0/1',

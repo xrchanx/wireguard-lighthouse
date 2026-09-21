@@ -10,8 +10,7 @@
         "type": "udp",
         "tag": "dns-direct",
         "server": "223.5.5.5",
-        "server_port": 53,
-        "detour": "direct"
+        "server_port": 53
       },
       {
         "type": "https",
@@ -70,6 +69,7 @@
       ]
     }
   ],
+  "http_clients": [{"tag": "lighthouse-http", "detour": "wg-lighthouse"}],
   "inbounds": [
     {
       "type": "tun",
@@ -102,6 +102,8 @@
   "route": {
     "rules": [
       {"ip_cidr": ["203.0.113.1/32"], "action": "route", "outbound": "direct"},
+      {"action": "sniff"},
+      {"protocol": "dns", "action": "hijack-dns"},
       {"rule_set": "custom-proxy", "action": "route", "outbound": "wg-lighthouse"},
       {"rule_set": "custom-direct", "action": "route", "outbound": "direct"},
       {"ip_is_private": true, "action": "route", "outbound": "direct"},
@@ -120,7 +122,6 @@
         "format": "binary",
         "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-geolocation-cn.srs",
         "initial_path": "rules/cache/geosite-geolocation-cn.srs",
-        "http_client": {"detour": "direct"},
         "update_interval": "24h"
       },
       {
@@ -129,7 +130,6 @@
         "format": "binary",
         "url": "https://raw.githubusercontent.com/SagerNet/sing-geosite/rule-set/geosite-geolocation-!cn.srs",
         "initial_path": "rules/cache/geosite-geolocation-!cn.srs",
-        "http_client": {"detour": "direct"},
         "update_interval": "24h"
       },
       {
@@ -138,11 +138,11 @@
         "format": "binary",
         "url": "https://raw.githubusercontent.com/SagerNet/sing-geoip/rule-set/geoip-cn.srs",
         "initial_path": "rules/cache/geoip-cn.srs",
-        "http_client": {"detour": "direct"},
         "update_interval": "24h"
       }
     ],
     "default_domain_resolver": {"server": "dns-direct", "strategy": "prefer_ipv4"},
+    "default_http_client": "lighthouse-http",
     "auto_detect_interface": true,
     "final": "wg-lighthouse"
   },
