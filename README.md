@@ -1,134 +1,120 @@
 # Tencent Cloud Lighthouse WireGuard Egress
 
-This repository contains the non-secret documentation and sanitized templates for a WireGuard IPv4 egress node on Tencent Cloud Lighthouse. The original WireGuard tunnel remains available as a standard full-tunnel mode. A Windows-first sing-box Smart Routing MVP is provided as an additive client mode.
+This repository records the verified, non-secret configuration for the
+Tencent Cloud Lighthouse WireGuard egress node. The supported architecture is
+standard WireGuard full-tunnel mode: the official WireGuard client sends all
+IPv4 traffic through the Lighthouse server.
 
-## Architecture
+The current mainline intentionally contains no second-generation router,
+Smart Router, sing-box, or TUN layer. Earlier routing experiments remain in
+Git history for auditability, but they are not part of the current deployment
+or support path.
 
-The server remains a normal WireGuard IPv4 egress node. Smart Routing is a client-side layer:
+## Verified deployment state
 
-```text
-Application
-    -> sing-box TUN
-    -> local rule engine and split DNS
-       -> DIRECT -> local Internet
-       -> PROXY  -> sing-box WireGuard endpoint -> Lighthouse -> Internet
-```
+| Item | Value |
+| --- | --- |
+| Server OS | Ubuntu 26.04 |
+| Public interface | `eth0` |
+| WireGuard interface | `wg0` |
+| VPN subnet | `10.66.66.0/24` |
+| Server address | `10.66.66.1/24` |
+| WireGuard listen port | UDP `51820` |
+| Compatibility entry point | UDP `443`, redirected to `51820` |
+| NAT | iptables `MASQUERADE` out `eth0` |
+| Service | `wg-quick@wg0.service`, enabled and active |
+| Client MTU | `1340` |
+| Windows kill-switch | OFF |
 
-The Smart Router uses sing-box's current WireGuard endpoint and rule-set configuration. It does not reimplement WireGuard and it must not be started while the same Windows peer is running as a separate full-tunnel WireGuard interface.
-
-## Deployment
-
-- Standard WireGuard endpoint: `43.160.239.253:51820/UDP`
-- Windows Smart Router compatibility endpoint: `43.160.239.253:443/UDP`, redirected server-side to UDP 51820
-- Public interface: `eth0`
-- VPN subnet: `10.66.66.0/24`
-- Server address: `10.66.66.1/24`
-- IPv4 forwarding: enabled and persisted in `/etc/sysctl.d/99-wireguard.conf`
-- NAT: iptables-nft MASQUERADE on the detected default interface
-- Service: `wg-quick@wg0.service`, enabled at boot
-
-Configured peer addresses:
+The four configured client addresses are:
 
 - iPhone: `10.66.66.2/32`
 - Windows: `10.66.66.3/32`
 - Android: `10.66.66.4/32`
 - macOS: `10.66.66.5/32`
 
-## Security
+All client profiles use:
 
-The real WireGuard configuration files are intentionally excluded from Git. They contain private keys and remain in the local `WireGuard/` directory only. Do not remove the ignore rules or commit generated QR files.
-
-Use the sanitized templates in `WireGuard/` as format references only.
-
-Never copy a real `PrivateKey`, `PreSharedKey`, API token, client config, or QR code into Git. The Smart Router installer reads the ignored `WireGuard/windows.conf` locally and writes an ignored generated JSON file; the generated file is never a repository artifact.
-
-## Tencent Cloud firewall
-
-The Lighthouse firewall must allow inbound `UDP 51820` and `UDP 443` from `0.0.0.0/0`. Keep SSH port 22 allowed. UDP 443 is a compatibility entry point for networks that drop return traffic on high UDP ports; standard WireGuard clients can continue using UDP 51820.
-
-Persist the compatibility redirect in `/etc/wireguard/wg0.conf`:
-
-```ini
-PostUp = iptables -t nat -C PREROUTING -i eth0 -p udp --dport 443 -j REDIRECT --to-ports 51820 || iptables -t nat -I PREROUTING 1 -i eth0 -p udp --dport 443 -j REDIRECT --to-ports 51820
-PostDown = while iptables -t nat -C PREROUTING -i eth0 -p udp --dport 443 -j REDIRECT --to-ports 51820 2>/dev/null; do iptables -t nat -D PREROUTING -i eth0 -p udp --dport 443 -j REDIRECT --to-ports 51820; done
+```text
+Endpoint = 43.160.239.253:443
+AllowedIPs = 0.0.0.0/0
+PersistentKeepalive = 25
+MTU = 1340
 ```
 
-## Client verification
+MTU `1340` is the final value selected by Windows iperf and PMTU testing. In
+the recorded test, `1340` was stable while `1420` was not; the observed
+four-stream download was approximately `186 Mbps` (single-stream about
+`91 Mbps`, with short peaks around `230–240 Mbps`). These are path-specific
+measurements, not a bandwidth guarantee.
 
-After importing and activating a client configuration, verify that the public IP is `43.160.239.253`, then check the server for a recent handshake with:
+## Architecture
+
+```text
+iPhone / Windows / Android / macOS
+    -> official WireGuard client
+    -> UDP 443 compatibility entry point
+    -> iptables REDIRECT to UDP 51820
+    -> wg0 (10.66.66.1/24)
+    -> iptables MASQUERADE on eth0
+    -> Internet
+```
+
+UDP `51820` remains the WireGuard socket. UDP `443` is only a compatibility
+entry point for networks that handle high UDP ports poorly; it is redirected
+on the server before WireGuard receives the packet.
+
+## Repository contents
+
+- [`WireGuard/server.example.conf`](WireGuard/server.example.conf) — sanitized
+  server interface, NAT, redirect, and peer layout.
+- [`WireGuard/iphone.example.conf`](WireGuard/iphone.example.conf),
+  [`WireGuard/windows.example.conf`](WireGuard/windows.example.conf),
+  [`WireGuard/android.example.conf`](WireGuard/android.example.conf), and
+  [`WireGuard/mac.example.conf`](WireGuard/mac.example.conf) — sanitized full-
+  tunnel client templates.
+- [`docs/deployment.md`](docs/deployment.md) — server installation and
+  service lifecycle.
+- [`docs/verification.md`](docs/verification.md) — client and server checks.
+- [`docs/troubleshooting.md`](docs/troubleshooting.md) — recovery and common
+  failure checks.
+
+## Deployment summary
+
+On the server, create `/etc/wireguard/wg0.conf` from the sanitized server
+example, replace only the local private/public-key placeholders, then enable
+the service:
+
+```bash
+sudo systemctl enable --now wg-quick@wg0
+sudo systemctl restart wg-quick@wg0
+```
+
+The Tencent Cloud firewall must allow inbound UDP `443` and UDP `51820` from
+the intended client networks, in addition to SSH access. The exact iptables
+rules and verification commands are in the deployment and verification
+documents.
+
+## Security
+
+Only sanitized examples are tracked. Real WireGuard configuration files,
+private keys, pre-shared keys, QR exports, API keys, and generated local state
+must remain outside Git. The ignore rules deliberately exclude real files such
+as `WireGuard/windows.conf`, `WireGuard/wg0.conf`, key files, and QR files.
+
+Do not paste a complete client configuration or any `PrivateKey` value into
+the repository. Public-key placeholders in the examples are documentation
+only.
+
+## Verification and troubleshooting
+
+After activating a client, verify that its public IPv4 address is
+`43.160.239.253`, then check the server for a recent handshake and traffic:
 
 ```bash
 sudo wg show wg0 latest-handshakes
 sudo wg show wg0 transfer
 ```
-## macOS
 
-Install the official WireGuard macOS app, choose **Import tunnel(s) from file**, and select
-`WireGuard/mac.conf`. Activate the tunnel and verify the public IP as above.
-
-The macOS client uses a new key and address `10.66.66.5/32`. Add its public key to the
-server's `wg0.conf` as a new peer before activating it:
-
-```ini
-[Peer]
-PublicKey = <MAC_PUBLIC_KEY_FROM_WIREGUARD_MAC_CONF>
-AllowedIPs = 10.66.66.5/32
-```
-
-## Standard WireGuard Mode
-
-The existing iPhone, Windows, Android, and macOS examples continue to describe full-tunnel WireGuard:
-
-```text
-all traffic -> official WireGuard client -> Lighthouse
-```
-
-The existing server service (`wg-quick@wg0.service`), peer addresses, and client compatibility are unchanged.
-
-## Smart Routing Mode
-
-Smart Routing is currently Windows-first and is implemented under [`smart-router/`](smart-router/README.md). It uses a sing-box TUN and deterministic local rules:
-
-```text
-LAN/private -> DIRECT
-China domain/IP rule-sets -> DIRECT
-explicit custom proxy rules -> WireGuard
-known global rule-set -> WireGuard
-unknown traffic -> WireGuard (configurable)
-```
-
-The default route is configured as `proxy`. Users edit the ignored local Windows WireGuard config only; the installer converts it into the ignored sing-box config without exposing keys.
-
-When another system-level VPN or proxy is active, Smart Router `DIRECT` means bypassing the
-Lighthouse WireGuard path; it does not guarantee the ISP's native egress. The Windows installer
-pins the Lighthouse WireGuard endpoint to the detected physical interface so it cannot recurse
-through the Smart Router TUN.
-
-## Windows Setup
-
-See [`smart-router/README.md`](smart-router/README.md) for installation, start, stop, rule update, and diagnostics commands. Run PowerShell as Administrator. Use either Standard WireGuard Mode or Smart Routing Mode for the Windows peer at a time.
-
-## Rule Priority
-
-The effective priority is:
-
-1. custom proxy/direct rules (proxy wins an accidental conflict)
-2. the Lighthouse endpoint itself (always direct to avoid a handshake loop)
-3. private/LAN addresses
-4. explicit proxy/global domain rule-sets
-5. China domain/IP rule-sets
-6. configured default route (`proxy` in the MVP)
-
-## DNS Routing
-
-China and custom-direct domains use the local DNS transport. Proxy/global and unknown domains use encrypted DoH through the WireGuard endpoint. DNS is hijacked by the TUN on Windows to prevent ordinary multihomed DNS lookups from bypassing the policy.
-
-## Updating Rules
-
-`smart-router/scripts/update-rules.ps1` atomically downloads the official SagerNet sing-geosite and sing-geoip rule-sets, validates them with sing-box, writes checksums to `smart-router/rules.lock.json`, and keeps the last known-good cache if an update fails.
-
-## Troubleshooting
-
-Run `smart-router/scripts/diagnose-windows.ps1` as Administrator. It checks the sing-box process, TUN, rule caches, DNS, public IP, endpoint configuration, and the expected `baidu.com`, `github.com`, and `openai.com` policy decisions. `stop-windows.ps1` removes the Smart Router process and cleans only routes belonging to its named TUN if a stale adapter remains.
-
-Smart Routing fails closed for the proxy path when its WireGuard endpoint is unavailable; direct/LAN traffic remains direct. A crashed process should leave normal Windows networking usable after the TUN cleanup. No AI or remote service is placed in the per-request routing path.
+See [`docs/verification.md`](docs/verification.md) and
+[`docs/troubleshooting.md`](docs/troubleshooting.md) for the complete checks.
