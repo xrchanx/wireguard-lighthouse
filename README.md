@@ -18,7 +18,8 @@ The Smart Router uses sing-box's current WireGuard endpoint and rule-set configu
 
 ## Deployment
 
-- Public endpoint: `43.160.239.253:51820/UDP`
+- Standard WireGuard endpoint: `43.160.239.253:51820/UDP`
+- Windows Smart Router compatibility endpoint: `43.160.239.253:443/UDP`, redirected server-side to UDP 51820
 - Public interface: `eth0`
 - VPN subnet: `10.66.66.0/24`
 - Server address: `10.66.66.1/24`
@@ -43,7 +44,14 @@ Never copy a real `PrivateKey`, `PreSharedKey`, API token, client config, or QR 
 
 ## Tencent Cloud firewall
 
-The Lighthouse firewall must allow inbound `UDP 51820` from `0.0.0.0/0`. Keep SSH port 22 allowed.
+The Lighthouse firewall must allow inbound `UDP 51820` and `UDP 443` from `0.0.0.0/0`. Keep SSH port 22 allowed. UDP 443 is a compatibility entry point for networks that drop return traffic on high UDP ports; standard WireGuard clients can continue using UDP 51820.
+
+Persist the compatibility redirect in `/etc/wireguard/wg0.conf`:
+
+```ini
+PostUp = iptables -t nat -C PREROUTING -i eth0 -p udp --dport 443 -j REDIRECT --to-ports 51820 || iptables -t nat -I PREROUTING 1 -i eth0 -p udp --dport 443 -j REDIRECT --to-ports 51820
+PostDown = while iptables -t nat -C PREROUTING -i eth0 -p udp --dport 443 -j REDIRECT --to-ports 51820 2>/dev/null; do iptables -t nat -D PREROUTING -i eth0 -p udp --dport 443 -j REDIRECT --to-ports 51820; done
+```
 
 ## Client verification
 
@@ -90,6 +98,11 @@ unknown traffic -> WireGuard (configurable)
 ```
 
 The default route is configured as `proxy`. Users edit the ignored local Windows WireGuard config only; the installer converts it into the ignored sing-box config without exposing keys.
+
+When another system-level VPN or proxy is active, Smart Router `DIRECT` means bypassing the
+Lighthouse WireGuard path; it does not guarantee the ISP's native egress. The Windows installer
+pins the Lighthouse WireGuard endpoint to the detected physical interface so it cannot recurse
+through the Smart Router TUN.
 
 ## Windows Setup
 

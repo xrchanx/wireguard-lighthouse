@@ -113,9 +113,17 @@ try {
             $configuredEndpoint = @($config.endpoints | Where-Object { $_.tag -eq 'wg-lighthouse' })[0]
             Report-Check -Passed ([bool]$configuredEndpoint) -Message 'WireGuard endpoint is present in the generated config.'
             if ($configuredEndpoint) {
+                $bindInterface = [string]$configuredEndpoint.bind_interface
+                $boundAdapter = if ($bindInterface) { Get-NetAdapter -Name $bindInterface -ErrorAction SilentlyContinue } else { $null }
+                Report-Check -Passed ([bool]$boundAdapter -and $boundAdapter.Status -eq 'Up') -Message ("WireGuard endpoint is pinned to an active physical interface: {0}." -f $bindInterface)
                 $peer = @($configuredEndpoint.peers)[0]
                 $endpointIp = $null
                 if ([System.Net.IPAddress]::TryParse([string]$peer.address, [ref]$endpointIp)) {
+                    $routeInterfaces = @(Find-NetRoute -RemoteIPAddress ([string]$peer.address) -ErrorAction Stop |
+                        ForEach-Object { $_.InterfaceAlias } |
+                        Where-Object { $_ } |
+                        Sort-Object -Unique)
+                    Report-Check -Passed ($routeInterfaces -contains $bindInterface) -Message ("WireGuard endpoint route uses the bound interface: {0}." -f $bindInterface)
                     Report-Check -Passed $true -Message ("WireGuard endpoint IP is configured: {0}:{1}. UDP handshake still requires a live peer." -f $peer.address, $peer.port) -Warning
                 }
                 else {

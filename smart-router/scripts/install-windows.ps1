@@ -2,6 +2,7 @@
 param(
     [string]$SingBoxPath,
     [string]$WireGuardConfigPath,
+    [string]$BindInterface,
     [switch]$SkipRuleUpdate
 )
 
@@ -123,6 +124,33 @@ try {
     $wgPeer.public_key = $serverPublicKey
     $wgPeer.allowed_ips = $allowedIps
 
+    $endpointIp = $null
+    $endpointIsIp = [System.Net.IPAddress]::TryParse($endpoint.Host, [ref]$endpointIp)
+    if ($BindInterface) {
+        $boundAdapter = Get-NetAdapter -Name $BindInterface -ErrorAction Stop
+        if ($boundAdapter.Status -ne 'Up') {
+            throw "The requested endpoint interface '$BindInterface' is not up."
+        }
+    }
+    elseif ($endpointIsIp) {
+        $routeInterfaces = @(Find-NetRoute -RemoteIPAddress $endpoint.Host -ErrorAction Stop |
+            ForEach-Object { $_.InterfaceAlias } |
+            Where-Object { $_ -and $_ -ne 'smart-router' } |
+            Sort-Object -Unique)
+        if ($routeInterfaces.Count -ne 1) {
+            throw "Could not select one physical interface for the WireGuard endpoint '$($endpoint.Host)'. Pass -BindInterface explicitly."
+        }
+        $BindInterface = $routeInterfaces[0]
+    }
+    else {
+        throw 'The WireGuard endpoint is a hostname. Pass -BindInterface with the physical interface name so the endpoint cannot recurse through a VPN/TUN.'
+    }
+    if (-not $BindInterface -or $BindInterface -eq 'smart-router') {
+        throw "Could not resolve a physical interface for the WireGuard endpoint '$($endpoint.Host)'. Pass -BindInterface explicitly."
+    }
+    $wgEndpoint | Add-Member -NotePropertyName 'bind_interface' -NotePropertyValue $BindInterface -Force
+    Write-Status -Level 'PASS' -Message ("WireGuard endpoint pinned to physical interface: {0}." -f $BindInterface)
+
     if ($peer.Contains('presharedkey') -and $peer['presharedkey']) {
         Assert-UsableSecretValue -Name 'PresharedKey' -Value $peer['presharedkey']
         $wgPeer | Add-Member -NotePropertyName 'pre_shared_key' -NotePropertyValue $peer['presharedkey'] -Force
@@ -131,8 +159,6 @@ try {
         $wgPeer.PSObject.Properties.Remove('pre_shared_key')
     }
 
-    $endpointIp = $null
-    $endpointIsIp = [System.Net.IPAddress]::TryParse($endpoint.Host, [ref]$endpointIp)
     $endpointRule = @($config.route.rules)[0]
     if ($endpointIsIp) {
         $endpointPrefix = if ($endpointIp.AddressFamily -eq [System.Net.Sockets.AddressFamily]::InterNetwork) { "$($endpoint.Host)/32" } else { "$($endpoint.Host)/128" }

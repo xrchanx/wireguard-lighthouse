@@ -17,3 +17,6 @@ smart-router/config/*.local.json
 smart-router/rules/cache/
 smart-router/rules/generated/
 smart-router/runtime/
+
+# Locally supplied tool binaries
+/bin/

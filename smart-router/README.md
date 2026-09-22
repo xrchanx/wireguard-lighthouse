@@ -43,7 +43,21 @@ If the WireGuard file is stored elsewhere:
   -SingBoxPath 'C:\Program Files\sing-box\sing-box.exe'
 ```
 
+The installer resolves the WireGuard endpoint's current physical route and writes sing-box's
+`bind_interface` into the generated endpoint configuration. To choose it explicitly:
+
+```powershell
+.\smart-router\scripts\install-windows.ps1 -BindInterface 'Wi-Fi'
+```
+
+This keeps the WireGuard UDP endpoint off the Smart Router TUN and any other VPN route. Re-run
+the installer if the physical adapter is renamed or replaced.
+
 The installer generates `smart-router/config/config.windows.json`. That file contains the local peer key and is ignored by Git. It also creates the local rule cache under `smart-router/rules/cache/`.
+
+For the documented Lighthouse deployment, set the ignored Windows peer endpoint to
+`43.160.239.253:443`. The server redirects UDP 443 to its unchanged WireGuard listener on UDP
+51820, allowing existing standard clients to keep using port 51820.
 
 ## Start, stop, and diagnose
 
@@ -104,6 +118,15 @@ The public Lighthouse server currently documents IPv4 egress. The template keeps
 - A rule download is written to a temporary file and promoted only after SRS decompilation succeeds. A failed update never clears the previous cache.
 - If the WireGuard endpoint is down, direct/LAN rules remain direct while proxy traffic fails rather than silently falling back to direct.
 - Stopping sing-box lets its TUN cleanup run; the stop script also removes only routes attached to the named `smart-router` adapter if a stale adapter remains.
+
+## Coexistence with third-party VPNs
+
+Smart Router can coexist with a third-party system proxy or VPN. Its WireGuard endpoint is bound
+to the physical interface selected during installation. Smart Router does not stop or reconfigure
+the third-party product.
+
+`DIRECT` means bypassing the Lighthouse WireGuard path. A third-party system-level VPN or proxy
+may still process that connection, so `DIRECT` does not guarantee the ISP's native public egress.
 
 ## Windows administrator acceptance
 
